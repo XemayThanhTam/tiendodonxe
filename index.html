@@ -110,6 +110,10 @@ main .wrap{padding-block:12px 40px;display:flex;flex-direction:column;gap:12px}
 .st.vuong{background:var(--amber);color:#fff} .st.lam{background:var(--accent-soft);color:var(--accent)} .st.xong{background:var(--ok);color:#fff}
 .pill{color:#fff} .pill.c1{background:var(--red)} .pill.c2{background:var(--ok)} .pill.c6{background:var(--amber)} .pill.c0,.pill.c3,.pill.c4{background:var(--ink-2)}
 .late{color:var(--red);font-weight:700}
+.asg{display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:var(--surface-2,#eef0ec);border-radius:10px;padding:10px 12px}
+.asg label{font-size:13px;font-weight:600}
+.asg select{flex:1;min-width:180px;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:9px 10px;font-size:15px}
+.need{color:var(--red);font-weight:700}
 
 .detail{border-top:1px solid var(--line);background:var(--surface);padding:10px 12px 14px;display:flex;flex-direction:column;gap:10px}
 .steps{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:10px;overflow:hidden}
@@ -237,7 +241,7 @@ main .wrap{padding-block:12px 40px;display:flex;flex-direction:column;gap:12px}
 const $=s=>document.querySelector(s);
 const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 function ls(k,v){try{if(v===undefined)return localStorage.getItem("tdx_"+k);if(v===null)localStorage.removeItem("tdx_"+k);else localStorage.setItem("tdx_"+k,String(v));}catch(e){return null}}
-const ABBR={"VSLMTQT":"Vệ sinh làm mới theo quy trình"};
+const ABBR={"VSLMTQT":"Vệ sinh làm mới theo quy trình","VSLDQT":"Vệ sinh làm đẹp theo quy trình","VSLDTQT":"Vệ sinh làm đẹp theo quy trình"};
 const CAT_NAME={0:"Khách xem",1:"Xe cọc",2:"Xe bán",3:"Trưng bày",4:"Trả lại",6:"Tân trang"};
 const ST_NAME={tre:"Quá hẹn",cham:"Chậm tiến độ",vuong:"Đang vướng",sap:"Sắp tới hẹn",lam:"Đúng tiến độ",xong:"Xong"};
 const ORDER={tre:0,cham:1,vuong:2,sap:3,lam:4,xong:5};
@@ -257,6 +261,7 @@ const ARGS={
   setVuong:(t,id,text)=>({id,text}),
   addStep:(t,id,text,ok)=>({id,text,ok}),
   removeStep:(t,id,pid)=>({id,pid}),
+  assign:(t,id,name)=>({id,name}),
   dangKyThongBao:(t,tk,ua)=>({token:tk,ua})
 };
 function call(fn,...args){
@@ -341,6 +346,7 @@ $("#logout").onclick=()=>{huyTB();ls("token",null);token=null;me=null;data=null;
 /* ---------- tải dữ liệu ---------- */
 async function load(){
   if(!token||busy)return;
+  const ae=document.activeElement;if(ae&&ae.dataset&&ae.dataset.assign!==undefined)return; // đang chọn người thực hiện thì không vẽ lại
   try{
     const d=await call("getData",token);
     apply(d);
@@ -395,7 +401,7 @@ function card({x,s}){
     <button class="head" data-open="${esc(x.id)}" aria-expanded="${isOpen}">
       <div><div class="xe">${esc(x.xe)}</div><div class="khung">${esc(x.khung)} · ERP #${esc(x.id)}</div></div>
       <div class="tags">${tags}</div>
-      <div class="meta"><span>KT: <b>${esc(x.tn||"—")}</b></span><span>YC: ${esc(x.yc||"—")}</span><span>${esc(x.lydo||"")}</span></div>
+      <div class="meta"><span>Tiếp nhận: <b>${esc(x.tn||"—")}</b></span><span>Thực hiện: ${x.th?`<b>${esc(x.th)}</b>`:'<span class="need">Chưa phân công</span>'}</span><span>YC: ${esc(x.yc||"—")}</span><span>${esc(x.lydo||"")}</span></div>
       <div class="meta"><span>Hẹn: <b class="${s.k==="tre"?"late":""}">${fmt(x.hen)}</b></span>${rel?`<span class="${s.k==="tre"?"late":""}">${rel}</span>`:""}</div>
       <div class="pr2">
         <div class="bar2" role="img" aria-label="Thực tế ${s.pct}%, mục tiêu ${s.tgt}%">
@@ -436,6 +442,7 @@ function detail(x,s){
   const canAdd=x.tanTrang&&me.role!=="TS"&&me.role!=="QC";
   return `<div class="detail">
     <div class="note">${me.role==="TS"?`Phần sơn ${vis.filter(v=>v.done).length}/${vis.length} · Cả xe `:""}${s.dn}/${s.tot} hạng mục đã xong · Tiếp nhận ${fmt(x.nhan)}${x.lan>1?" · Lần "+x.lan:""}</div>
+    ${x.canAssign?`<div class="asg"><label for="asg-${esc(x.id)}">Người thực hiện</label><select id="asg-${esc(x.id)}" data-assign="${esc(x.id)}"><option value="">— Chưa phân công —</option>${(data.thucHien||[]).map(n=>`<option ${n===x.th?"selected":""} value="${esc(n)}">${esc(n)}</option>`).join("")}</select>${x.th&&x.thBy?`<span class="note" style="width:100%">${esc(x.thBy)} phân công lúc ${esc(fmt(x.thAt))}</span>`:""}</div>`:""}
     ${planInfo}
     ${x.vuong?`<div class="block"><b>Vướng:</b> ${esc(x.vuong.text)} <span class="note">(${esc(fmt(x.vuong.at))} · ${esc(x.vuong.by)})</span></div>`:""}
     ${x.note?`<div class="note">Ghi chú: ${esc(x.note)}</div>`:""}
@@ -461,7 +468,15 @@ document.addEventListener("click",e=>{
   if(t.dataset.vuong){openVuong(t.dataset.vuong)}
 });
 document.addEventListener("change",async e=>{
-  const t=e.target;if(!t.dataset||t.dataset.tick===undefined)return;
+  const t=e.target;
+  if(t.dataset&&t.dataset.assign!==undefined){
+    const id=t.dataset.assign, name=t.value;t.disabled=true;busy=true;
+    try{apply(await call("assign",token,id,name));toast(name?"Đã giao xe cho "+name:"Đã bỏ phân công")}
+    catch(err){if(isAuth(err)){ls("token",null);showLogin("Phiên đăng nhập hết hiệu lực.");return}toast("Chưa lưu được: "+(err.message||err),true);render()}
+    finally{busy=false}
+    return;
+  }
+  if(!t.dataset||t.dataset.tick===undefined)return;
   const x=data.xe.find(v=>v.id===t.dataset.tick), st=x&&x.steps.find(v=>v.key===t.dataset.key);if(!st)return;
   const want=t.checked;st.done=want;render(); // hiện ngay, máy chủ xác nhận sau
   busy=true;
