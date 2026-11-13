@@ -114,6 +114,10 @@ main .wrap{padding-block:12px 40px;display:flex;flex-direction:column;gap:12px}
 .asg label{font-size:13px;font-weight:600}
 .asg select{flex:1;min-width:180px;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:9px 10px;font-size:15px}
 .need{color:var(--red);font-weight:700}
+#nbList li.nbh{cursor:default;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-2);background:var(--surface-2);padding:6px 12px}
+#nbList li.nbh.xl{color:var(--red);background:var(--red-soft)}
+#nbList li.xl{border-left:4px solid var(--red)}
+#nbList li.xl .tm{color:var(--red);font-weight:600}
 
 .detail{border-top:1px solid var(--line);background:var(--surface);padding:10px 12px 14px;display:flex;flex-direction:column;gap:10px}
 .steps{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:10px;overflow:hidden}
@@ -471,7 +475,7 @@ document.addEventListener("change",async e=>{
   const t=e.target;
   if(t.dataset&&t.dataset.assign!==undefined){
     const id=t.dataset.assign, name=t.value;t.disabled=true;busy=true;
-    try{apply(await call("assign",token,id,name));toast(name?"Đã giao xe cho "+name:"Đã bỏ phân công")}
+    try{apply(await call("assign",token,id,name));taiNb();toast(name?"Đã giao xe cho "+name:"Đã bỏ phân công")}
     catch(err){if(isAuth(err)){ls("token",null);showLogin("Phiên đăng nhập hết hiệu lực.");return}toast("Chưa lưu được: "+(err.message||err),true);render()}
     finally{busy=false}
     return;
@@ -480,7 +484,7 @@ document.addEventListener("change",async e=>{
   const x=data.xe.find(v=>v.id===t.dataset.tick), st=x&&x.steps.find(v=>v.key===t.dataset.key);if(!st)return;
   const want=t.checked;st.done=want;render(); // hiện ngay, máy chủ xác nhận sau
   busy=true;
-  try{apply(await call("tick",token,x.id,st.key,want));toast(want?"Đã tick: "+st.t:"Đã bỏ tick")}
+  try{apply(await call("tick",token,x.id,st.key,want));taiNb();toast(want?"Đã tick: "+st.t:"Đã bỏ tick")}
   catch(err){st.done=!want;render();if(isAuth(err)){ls("token",null);showLogin("Phiên đăng nhập hết hiệu lực.");return}toast("Chưa lưu được: "+(err.message||err),true)}
   finally{busy=false}
 });
@@ -492,7 +496,7 @@ function openVuong(id){
 }
 async function saveVuong(text){
   busy=true;
-  try{apply(await call("setVuong",token,vId,text));$("#ov").hidden=true;toast(text?"Đã báo vướng":"Đã gỡ vướng")}
+  try{apply(await call("setVuong",token,vId,text));taiNb();$("#ov").hidden=true;toast(text?"Đã báo vướng":"Đã gỡ vướng")}
   catch(err){$("#vfErr").textContent="Chưa lưu được: "+(err.message||err);$("#vfErr").hidden=false}
   finally{busy=false}
 }
@@ -575,19 +579,25 @@ async function start(){
 }
 document.addEventListener("visibilitychange",()=>{if(!document.hidden&&token){load();taiNb()}});
 /* ---------- chuông lịch sử thông báo ---------- */
-const NB={ds:[]};let nbT=null;
-function soNb(n){const b=$("#nbBd");b.textContent=n>99?"99+":n;b.hidden=!(n>0)}
-function taiNb(){if(!token)return;call("thongBao").then(r=>{NB.ds=r.ds||[];soNb(r.chuaXem||0);if(!$("#ovNb").hidden)veNb()}).catch(()=>{})}
+const NB={ds:[],xl:[]};let nbT=null;
+// Số trên chuông = cảnh báo còn hiệu lực (chỉ hết khi xe được xử lý) + thông báo thường chưa xem
+function demNb(){return NB.xl.length+NB.ds.filter(x=>x.moi).length}
+function soNb(n){const b=$("#nbBd");b.textContent=n>99?"99+":n;b.hidden=!(n>0);b.classList.toggle("xl",NB.xl.length>0)}
+function taiNb(){if(!token)return;call("thongBao").then(r=>{NB.ds=r.ds||[];NB.xl=r.xl||[];soNb(demNb());if(!$("#ovNb").hidden)veNb()}).catch(()=>{})}
 function veNb(){
-  $("#nbList").innerHTML=NB.ds.length?NB.ds.map((x,i)=>`<li class="${x.moi?"moi":""}" data-nb="${i}"><span class="tt">${esc(x.title)}</span><span class="bb">${esc(x.body)}</span><span class="tm">${esc(x.loai)} · ${esc(fmt(x.t))}</span></li>`).join(""):'<li style="cursor:default"><span class="bb">Chưa có thông báo nào.</span></li>';
+  const li=(x,k,i,cls,tm)=>`<li class="${cls}" data-nb="${k}:${i}"><span class="tt">${esc(x.title)}</span><span class="bb">${esc(x.body)}</span><span class="tm">${tm}</span></li>`;
+  let h="";
+  if(NB.xl.length)h+=`<li class="nbh xl">Cần xử lý (${NB.xl.length}) · tự hết khi xe được xử lý xong hoặc kịp tiến độ</li>`+NB.xl.map((x,i)=>li(x,"xl",i,"xl",esc(x.loai)+" · đang chờ xử lý")).join("");
+  if(NB.ds.length)h+=`<li class="nbh">Đã thông báo</li>`+NB.ds.map((x,i)=>li(x,"ds",i,x.moi?"moi":"",esc(x.loai)+" · "+esc(fmt(x.t)))).join("");
+  $("#nbList").innerHTML=h||'<li style="cursor:default"><span class="bb">Chưa có thông báo nào.</span></li>';
   vePush();
 }
-$("#nbBtn").onclick=()=>{$("#ovNb").hidden=false;veNb();if(NB.ds.some(x=>x.moi)){call("daXemThongBao").then(()=>{soNb(0)}).catch(()=>{})}};
-$("#nbClose").onclick=()=>{$("#ovNb").hidden=true;NB.ds.forEach(x=>x.moi=false)};
+$("#nbBtn").onclick=()=>{$("#ovNb").hidden=false;veNb();if(NB.ds.some(x=>x.moi)){call("daXemThongBao").then(()=>{NB.ds.forEach(x=>x.moi=false);soNb(demNb())}).catch(()=>{})}};
+$("#nbClose").onclick=()=>{$("#ovNb").hidden=true};
 $("#ovNb").addEventListener("click",e=>{
   if(e.target.id==="ovNb"){$("#ovNb").hidden=true;return}
   const li=e.target.closest("[data-nb]");if(!li)return;
-  const x=NB.ds[+li.dataset.nb];$("#ovNb").hidden=true;
+  const [k,i]=li.dataset.nb.split(":");const x=(k==="xl"?NB.xl:NB.ds)[+i];$("#ovNb").hidden=true;
   if(x&&x.id&&data&&data.xe.some(v=>v.id===x.id)){scope="all";typeF="all";statF="all";open.add(x.id);render();
     setTimeout(()=>{const el=document.querySelector(`[data-open="${CSS.escape(x.id)}"]`);el&&el.scrollIntoView({behavior:"smooth",block:"center"})},50)}
 });
